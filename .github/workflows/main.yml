@@ -23,4 +23,4 @@ jobs:
           docker build -t complex/multi-client ./client
           docker build -t complex/multi-worker ./worker
           docker build -t complex/multi-server ./server
-          docker build -t complex/multi-nginx ./nginx
+          docker build -t complex/multi-nginx ./ngnix
