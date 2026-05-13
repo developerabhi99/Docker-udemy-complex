@@ -1,0 +1,26 @@
+name: Deploy Complex
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          docker build -t complex/client-test -f ./client/Dockerfile.dev ./client
+          docker run -e CI=true complex/client-test npm test
+
+      - name: Build production images
+        run: |
+          docker build -t complex/multi-client ./client
+          docker build -t complex/multi-worker ./worker
+          docker build -t complex/multi-server ./server
+          docker build -t complex/multi-nginx ./nginx
