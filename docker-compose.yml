@@ -6,14 +6,14 @@ services:
        - POSTGRES_PASSWORD=postgres_password
    redis:
      image: 'redis:latest'
-   ngnix:
+   nginx:
      restart: always
      depends_on:
        - api
        - client
      build:
        dockerfile: Dockerfile.dev 
-       context: ./ngnix 
+       context: ./nginx 
      ports:
        - "3050:80"
    api:
