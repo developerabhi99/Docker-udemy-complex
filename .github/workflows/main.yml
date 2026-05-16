@@ -37,3 +37,17 @@ jobs:
           docker push abhijitshaw99/multi-worker
           docker push abhijitshaw99/multi-server
           docker push abhijitshaw99/multi-nginx
+
+      - name: Create deployment zip
+        run: zip -r deploy.zip docker-compose.yml
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_KEY }}
+          application_name: multi-docker
+          environment_name: Multi-docker-env
+          version_label: ${{ github.sha }}
+          region: ap-south-1
+          deployment_package: deploy.zip
