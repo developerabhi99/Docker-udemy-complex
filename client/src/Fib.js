@@ -6,6 +6,8 @@ class Fib extends Component {
     seenIndexes: [],
     values: {},
     index: '',
+    error: '',
+    isSubmitting: false,
   };
 
   componentDidMount() {
@@ -28,47 +30,106 @@ class Fib extends Component {
   handleSubmit = async (event) => {
     event.preventDefault();
 
-    await axios.post('/api/values', {
-      index: this.state.index,
-    });
-    this.setState({ index: '' });
+    this.setState({ error: '', isSubmitting: true });
+
+    try {
+      await axios.post('/api/values', {
+        index: this.state.index,
+      });
+
+      this.setState({ index: '' });
+      await Promise.all([this.fetchValues(), this.fetchIndexes()]);
+    } catch (err) {
+      const error =
+        err.response && err.response.data
+          ? err.response.data
+          : 'Unable to submit this index';
+
+      this.setState({ error });
+    } finally {
+      this.setState({ isSubmitting: false });
+    }
   };
 
   renderSeenIndexes() {
-    return this.state.seenIndexes.map(({ number }) => number).join(', ');
+    if (!this.state.seenIndexes.length) {
+      return <p className="empty-state">No indexes have been submitted yet.</p>;
+    }
+
+    return (
+      <div className="index-list">
+        {this.state.seenIndexes.map(({ number }, position) => (
+          <span key={`${number}-${position}`}>{number}</span>
+        ))}
+      </div>
+    );
   }
 
   renderValues() {
-    const entries = [];
+    const entries = Object.entries(this.state.values || {});
 
-    for (let key in this.state.values) {
-      entries.push(
-        <div key={key}>
-          For index {key} I calculated {this.state.values[key]}
-        </div>
-      );
+    if (!entries.length) {
+      return <p className="empty-state">Calculated values will appear here.</p>;
     }
 
-    return entries;
+    return (
+      <div className="results-grid">
+        {entries.map(([key, value]) => (
+          <div className="result-card" key={key}>
+            <span className="result-label">Index {key}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   render() {
     return (
-      <div>
-        <form onSubmit={this.handleSubmit}>
-          <label>Enter your index:</label>
-          <input
-            value={this.state.index}
-            onChange={(event) => this.setState({ index: event.target.value })}
-          />
-          <button>Submit</button>
-        </form>
+      <div className="fib-page">
+        <section className="input-panel">
+          <div className="section-heading">
+            <p className="eyebrow">Submit a workload</p>
+            <h2>Calculate a Fibonacci value</h2>
+          </div>
 
-        <h3>Indexes I have seen:</h3>
-        {this.renderSeenIndexes()}
+          <form className="fib-form" onSubmit={this.handleSubmit}>
+            <label htmlFor="fib-index">Index</label>
+            <div className="input-row">
+              <input
+                id="fib-index"
+                inputMode="numeric"
+                placeholder="Try 7"
+                value={this.state.index}
+                onChange={(event) =>
+                  this.setState({ index: event.target.value, error: '' })
+                }
+              />
+              <button disabled={this.state.isSubmitting}>
+                {this.state.isSubmitting ? 'Submitting' : 'Submit'}
+              </button>
+            </div>
+            {this.state.error && <p className="form-error">{this.state.error}</p>}
+          </form>
+        </section>
 
-        <h3>Calculated Values updated:</h3>
-        {this.renderValues()}
+        <section className="content-grid">
+          <div className="panel">
+            <div className="section-heading">
+              <p className="eyebrow">Postgres</p>
+              <h3>Submitted indexes</h3>
+            </div>
+            {this.renderSeenIndexes()}
+          </div>
+
+          <div className="panel">
+            <div className="section-heading">
+              <p className="eyebrow">Redis + worker</p>
+              <h3>Calculated values</h3>
+            </div>
+            {this.renderValues()}
+          </div>
+        </section>
       </div>
     );
   }

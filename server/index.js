@@ -9,6 +9,16 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+const redisOptions = {
+  host: keys.redisHost,
+  port: keys.redisPort,
+  retry_strategy: () => 1000,
+};
+
+if (keys.redisTls) {
+  redisOptions.tls = {};
+}
+
 // Postgres Client Setup
 const { Pool } = require('pg');
 const pgClient = new Pool({
@@ -31,13 +41,11 @@ pgClient.on('connect', (client) => {
 
 // Redis Client Setup
 const redis = require('redis');
-const redisClient = redis.createClient({
-  host: keys.redisHost,
-  port: keys.redisPort,
-  retry_strategy: () => 1000,
-  tls: {}
-});
+const redisClient = redis.createClient(redisOptions);
 const redisPublisher = redisClient.duplicate();
+
+redisClient.on('error', (err) => console.error('Redis client error', err));
+redisPublisher.on('error', (err) => console.error('Redis publisher error', err));
 
 // Express route handlers
 
@@ -46,29 +54,48 @@ app.get('/', (req, res) => {
 });
 
 app.get('/values/all', async (req, res) => {
-  const values = await pgClient.query('SELECT * from values');
+  try {
+    const values = await pgClient.query('SELECT * from values');
 
-  res.send(values.rows);
+    res.send(values.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: 'Failed to fetch saved indexes' });
+  }
 });
 
 app.get('/values/current', async (req, res) => {
   redisClient.hgetall('values', (err, values) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send({ error: 'Failed to fetch calculated values' });
+    }
+
     res.send(values);
   });
 });
 
 app.post('/values', async (req, res) => {
-  const index = req.body.index;
+  const index = parseInt(req.body.index, 10);
 
-  if (parseInt(index) > 40) {
+  if (Number.isNaN(index)) {
+    return res.status(400).send('Index must be a number');
+  }
+
+  if (index > 40) {
     return res.status(422).send('Index too high');
   }
 
-  redisClient.hset('values', index, 'Nothing yet!');
-  redisPublisher.publish('insert', index);
-  pgClient.query('INSERT INTO values(number) VALUES($1)', [index]);
+  try {
+    redisClient.hset('values', index, 'Nothing yet!');
+    redisPublisher.publish('insert', index);
+    await pgClient.query('INSERT INTO values(number) VALUES($1)', [index]);
 
-  res.send({ working: true });
+    res.send({ working: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ error: 'Failed to save index' });
+  }
 });
 
 app.listen(5000, (err) => {
